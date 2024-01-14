@@ -1,4 +1,3 @@
-from pydantic import EmailStr
 from sqlalchemy import Column, String
 from werkzeug.security import check_password_hash, generate_password_hash
 
@@ -11,13 +10,15 @@ class User(IdMixin, TimestampMixin, Base):
 
     login = Column(String(255), unique=True, nullable=False)
     password = Column(String(255), nullable=False)
-    full_name = Column(String(150))
-    email = Column(String(255), unique=True, nullable=False)
+    first_name = Column(String(50))
+    last_name = Column(String(50))
+    email = Column(String(255), unique=True, nullable=True)
 
-    def __init__(self, login: str, password: str, full_name: str, email: EmailStr) -> None:
+    def __init__(self, login: str, password: str, first_name: str, last_name: str, email: str) -> None:
         self.login = login
         self.password = self.password = generate_password_hash(password)
-        self.full_name = full_name
+        self.first_name = first_name
+        self.last_name = last_name
         self.email = email
 
     def check_password(self, password: str) -> bool:
