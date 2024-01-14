@@ -4,32 +4,34 @@ from contextlib import asynccontextmanager
 import uvicorn
 from fastapi import FastAPI
 from fastapi.responses import ORJSONResponse
-from redis.asyncio import Redis
 
-from api.v1 import auth, genres, persons
-from core.config import redis_settings, elastic_settings
+from api.v1 import auth, users, roles
+# from redis.asyncio import Redis
+
+# from api.v1 import auth, genres, persons
+from core.config import project_settings, redis_settings
 from core.logger import LOGGING
-from db import cache
-from db import database
-from db.elastic import Elastic
-from db.redisdb import RedisDb
+from db.postgres import create_database, purge_database
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     # Создаем подключение к базам при старте сервера.
-    cache.cache = RedisDb(Redis(host=redis_settings.host, port=redis_settings.port))
-    database.db = Elastic(AsyncElasticsearch(hosts=[f'http://{elastic_settings.host}:{elastic_settings.port}']))
+    # redis.redis = Redis(**redis_settings.get_connection_info())
 
     # Проверяем соединения с базами.
-    await cache.cache.ping()
-    await database.db.ping()
+    # await redis.redis.ping()
+
+    from models.user import User
+    # TODO: Перейти на миграции
+    await create_database()
 
     yield
 
     # Отключаемся от баз при выключении сервера
-    await cache.cache.close()
-    await database.db.close()
+    # TODO: Перейти на миграции
+    await purge_database()
+    # await redis.redis.close()
 
 
 app = FastAPI(
@@ -48,13 +50,9 @@ app = FastAPI(
 )
 
 # Подключаем роутер к серверу с указанием префикса для API (/v1/films).
-app.include_router(films.router, prefix='/api/v1/films', tags=['Films'])
-
-# Подключаем роутер к серверу с указанием префикса для API (/v1/genres).
-app.include_router(genres.router, prefix='/api/v1/genres', tags=['Genres'])
-
-# Подключаем роутер к серверу с указанием префикса для API (/v1/persons).
-app.include_router(persons.router, prefix='/api/v1/persons', tags=['Persons'])
+app.include_router(auth.router, prefix='/api/v1')
+app.include_router(users.router, prefix='/api/v1')
+app.include_router(roles.router, prefix='/api/v1')
 
 if __name__ == '__main__':
     # Запускаем приложение с помощью uvicorn сервера.
