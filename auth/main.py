@@ -2,27 +2,30 @@ import logging
 from contextlib import asynccontextmanager
 
 import uvicorn
+from async_fastapi_jwt_auth import AuthJWT
+from async_fastapi_jwt_auth.exceptions import AuthJWTException
 from fastapi import FastAPI
 from fastapi.responses import ORJSONResponse
+from starlette.requests import Request
+from starlette.responses import JSONResponse
 
 from api.v1 import auth, users, roles
-# from redis.asyncio import Redis
+from redis.asyncio import Redis
 
-# from api.v1 import auth, genres, persons
 from core.config import project_settings, redis_settings
 from core.logger import LOGGING
-from db.postgres import create_database, purge_database
+from db.postgres import create_database  # , purge_database
+from db import redisdb as redis
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     # Создаем подключение к базам при старте сервера.
-    # redis.redis = Redis(**redis_settings.get_connection_info())
+    redis.redis = Redis(**redis_settings.model_dump())
 
     # Проверяем соединения с базами.
-    # await redis.redis.ping()
+    await redis.redis.ping()
 
-    from models.user import User
     # TODO: Перейти на миграции
     await create_database()
 
@@ -30,8 +33,13 @@ async def lifespan(_: FastAPI):
 
     # Отключаемся от баз при выключении сервера
     # TODO: Перейти на миграции
-    await purge_database()
-    # await redis.redis.close()
+    # await purge_database()
+    await redis.redis.close()
+
+
+@AuthJWT.load_config
+def get_config():
+    return project_settings
 
 
 app = FastAPI(
@@ -53,6 +61,12 @@ app = FastAPI(
 app.include_router(auth.router, prefix='/api/v1')
 app.include_router(users.router, prefix='/api/v1')
 app.include_router(roles.router, prefix='/api/v1')
+
+
+@app.exception_handler(AuthJWTException)
+def authjwt_exception_handler(_: Request, exc: AuthJWTException):
+    return JSONResponse(status_code=exc.status_code, content={"detail": exc.message})
+
 
 if __name__ == '__main__':
     # Запускаем приложение с помощью uvicorn сервера.

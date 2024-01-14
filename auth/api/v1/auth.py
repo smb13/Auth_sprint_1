@@ -1,44 +1,69 @@
-from typing import Annotated
-
-from fastapi import APIRouter, Depends, Query
-from fastapi.encoders import jsonable_encoder
+from async_fastapi_jwt_auth import AuthJWT
+from fastapi import APIRouter, Depends, HTTPException
 from http import HTTPStatus
 
-from psycopg.errors import UniqueViolation
-from pydantic import BaseModel
-from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.responses import JSONResponse
 
-from db.postgres import get_session
+from db.redisdb import get_redis
 from models.user import User
-from schemas.user import UserInDB, NewUserCredentials
+from schemas.error import ErrorConflict
+from schemas.user import UserCreated, UserCreateRequest, UserAuthRequest, JWTAccessToken, JWTTokens, UserUpdateRequest
+from services.auth import AuthService, get_auth_service
 
 router = APIRouter(redirect_slashes=False, prefix="/auth", tags=['Auth'])
 
 
-class ConflictError(BaseModel):
-    """Неуникальные данные"""
-    message: Annotated[str, Query(description="", examples=["Key (login)=(username) already exists."])]
-    name: Annotated[str, Query(description="", examples=["users_login_key"])]
+@AuthJWT.token_in_denylist_loader
+async def check_if_token_in_denylist(decrypted_token):
+    entry = await (await get_redis()).get(decrypted_token["jti"])
+    return entry and entry == b"revoked"
 
 
-@router.post('/signup', response_model=UserInDB, status_code=HTTPStatus.CREATED, responses={
-    HTTPStatus.CONFLICT: {"model": ConflictError, "description": "Confilct Error"}
+@router.post('/signup', response_model=UserCreated, status_code=HTTPStatus.CREATED, responses={
+    HTTPStatus.CONFLICT: {"model": ErrorConflict, "description": "Conflict error"}
 })
-async def create_user(user_create: NewUserCredentials, db: AsyncSession = Depends(get_session)) -> JSONResponse | User:
-    user_dto = jsonable_encoder(user_create)
-    user = User(**user_dto)
-    db.add(user)
-    try:
-        await db.commit()
-    except IntegrityError as e:
-        await db.rollback()
-        if isinstance(e.orig, UniqueViolation):
-            return JSONResponse(status_code=HTTPStatus.CONFLICT,
-                                content=ConflictError(
-                                    message=e.orig.diag.message_detail,
-                                    name=e.orig.diag.constraint_name).model_dump())
-        raise e
-    await db.refresh(user)
-    return user
+async def create_user(request: UserCreateRequest, auth: AuthService = Depends(get_auth_service)) -> JSONResponse | User:
+    return await auth.create_user(request)
+
+
+@router.post("/login")
+async def login(request: UserAuthRequest, auth: AuthService = Depends(get_auth_service)) -> JWTTokens:
+    tokens = await auth.authenticate(**request.model_dump())
+    if not tokens:
+        raise HTTPException(status_code=HTTPStatus.FORBIDDEN)
+
+    return tokens
+
+
+@router.post("/logout")
+async def logout(_: AuthService = Depends(get_auth_service)):
+    # TODO: Убить все refresh токены
+    return {}
+
+
+@router.post("/refresh")
+async def refresh(auth: AuthService = Depends(get_auth_service)) -> JWTAccessToken:
+    return await auth.refresh_token()
+
+
+@router.delete("/refresh-revoke")
+async def refresh_revoke(auth: AuthService = Depends(get_auth_service)):
+    await auth.revoke_refresh_token()
+    return {"detail": "Refresh token has been revoked"}
+
+
+@router.delete("/access-revoke")
+async def access_revoke(auth: AuthService = Depends(get_auth_service)):
+    await auth.revoke_access_token()
+    return {"detail": "Access token has been revoked"}
+
+
+@router.patch("/profile")
+async def profile(request: UserUpdateRequest, auth: AuthService = Depends(get_auth_service)):
+    await auth.update_profile(request)
+
+
+@router.get("/history")
+async def history(_: AuthService = Depends()):
+    # TODO: Выдать спсиок предыдущих входов (сессий) с паджинаццией.
+    return {}

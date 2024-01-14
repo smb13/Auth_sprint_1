@@ -1,3 +1,4 @@
+from datetime import timedelta
 from logging import config as logging_config
 
 from core.logger import LOGGING
@@ -9,7 +10,13 @@ logging_config.dictConfig(LOGGING)
 
 
 class ProjectSettings(BaseSettings):
+    # TODO: Вынести в настройки.
     name: str = Field('Auth Service')
+    authjwt_secret_key: str = "secret"
+    authjwt_access_token_expires: int = timedelta(minutes=30).total_seconds()
+    authjwt_refresh_token_expires: int = timedelta(hours=24).total_seconds()
+    authjwt_denylist_enabled: bool = True
+    authjwt_denylist_token_checks: set = {"access", "refresh"}
 
     model_config = SettingsConfigDict(env_prefix='project_', env_file='.env')
 
