@@ -76,28 +76,42 @@ class AuthService:
 
     async def logout(self) -> RevokedSessions:
         await self.jwt.jwt_required()
-        # TODO: Сделать
-        return RevokedSessions(sessions=[])
+        sessions = (
+            await self.db.execute(
+                select(Session).
+                where(Session.user_id == (await self.jwt.get_raw_jwt())['sub']).
+                where(Session.expire >= datetime.datetime.utcnow())
+            )
+        ).scalars().all()
+        revoked_sessions = []
+        for session in sessions:
+            token = await self.revoke_token(session.refresh_token, False)
+            if token:
+                revoked_sessions.append(token)
+
+        revoked_sessions.append(await self.revoke_token())
+
+        return RevokedSessions(sessions=revoked_sessions)
 
     async def refresh_token(self) -> JWTAccessToken:
         await self.jwt.jwt_refresh_token_required()
         return JWTAccessToken(access_token=await self.jwt.create_access_token(subject=await self.jwt.get_jwt_subject()))
 
+    async def revoke_token(self, token: str = None, force: bool = True) -> str:
+        jti = (await self.jwt.get_raw_jwt(token))
+        revoked = force or (not await self.redis.get(jti["jti"]))
+        await self.redis.setex(
+            jti["jti"], datetime.datetime.utcfromtimestamp(jti["exp"]) - datetime.datetime.utcnow(), 'revoked'
+        )
+        return jti["jti"] if revoked else None
+
     async def revoke_refresh_token(self) -> RevokedTokens:
         await self.jwt.jwt_refresh_token_required()
-        jti = (await self.jwt.get_raw_jwt())
-        await self.redis.setex(
-            jti["jti"], datetime.datetime.utcfromtimestamp(jti["exp"])-datetime.datetime.utcnow(), 'revoked'
-        )
-        return RevokedTokens(tokens=[jti["jti"]])
+        return RevokedTokens(tokens=[await self.revoke_token()])
 
     async def revoke_access_token(self) -> RevokedTokens:
         await self.jwt.jwt_required()
-        jti = (await self.jwt.get_raw_jwt())
-        await self.redis.setex(
-            jti["jti"], datetime.datetime.utcfromtimestamp(jti["exp"])-datetime.datetime.utcnow(), 'revoked'
-        )
-        return RevokedTokens(tokens=[jti["jti"]])
+        return RevokedTokens(tokens=[await self.revoke_token()])
 
     async def update_profile(self, request: UserUpdateRequest) -> UpdatedProfileFields:
         await self.jwt.jwt_required()
