@@ -43,8 +43,8 @@ class JWTAccessToken(BaseModel):
     )]
 
 
-class JWTTokens(JWTAccessToken):
-    """Набор токенов"""
+class CreatedSession(JWTAccessToken):
+    """Новая пользовательская сессия"""
     refresh_token: Annotated[str, Field(
         description='Токен обновления',
         examples=[
@@ -53,3 +53,35 @@ class JWTTokens(JWTAccessToken):
             'n0.GwE4P6O3ug03cqeQVNoZqd_fRV7m_O-nrmWk31FoUOM'
         ]
     )]
+    session_id: Annotated[UUID, Field(description="Идентификатор созданной сессии", example=[uuid4()])]
+
+
+class RevokedTokens(BaseModel):
+    """Список отозванных токенов"""
+    tokens: list[Annotated[str, Field(
+        description='Отозванный токен',
+        examples=[
+            'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VybmFtZSIsImlhdCI6MTcwNTI1NjYyMSwibmJmIjoxNzA1MjU2NjIx'
+            'LCJqdGkiOiIyNjY5OWUxMS05YThlLTQzZTctOTY0Zi0xNDBjNGU2ZmFiODkiLCJleHAiOjE3MDUyNTY5MjEsInR5cGUiOiJyZWZyZXNoI'
+            'n0.GwE4P6O3ug03cqeQVNoZqd_fRV7m_O-nrmWk31FoUOM'
+        ]
+    )]]
+
+
+class RevokedSessions(BaseModel):
+    """Список сессий с отозвамыми токенами обновления"""
+    sessions: list[Annotated[UUID, Field(description='Идентификатор сессии', examples=[uuid4()])]]
+
+
+class UpdatedProfileFields(BaseModel):
+    updated_fields: list[
+        Annotated[str, Field(
+            description='Обновленных поля профиля пользователя', examples=['login', 'password', 'email']
+        )]
+    ]
+
+
+class SessionsHistory(BaseModel):
+    sessions: list[
+        str
+    ]
