@@ -64,6 +64,6 @@ async def profile(request: UserUpdateRequest, auth: AuthService = Depends(get_au
 
 
 @router.get("/history")
-async def history(_: AuthService = Depends()):
+async def history(auth: AuthService = Depends(get_auth_service)):
     # TODO: Выдать спсиок предыдущих входов (сессий) с паджинаццией.
     return {}
