@@ -16,7 +16,8 @@ from db.redisdb import get_redis
 from models.session import Session
 from models.user import User
 from schemas.error import ErrorConflict
-from schemas.user import JWTTokens, JWTAccessToken, UserUpdateRequest, UserCreateRequest
+from schemas.user import JWTAccessToken, UserUpdateRequest, UserCreateRequest, RevokedSessions, CreatedSession, \
+    RevokedTokens, UpdatedProfileFields, SessionsHistory
 
 
 class AuthService:
@@ -30,7 +31,7 @@ class AuthService:
         self.jwt = jwt
         self.redis = redis
 
-    async def create_user(self, request: UserCreateRequest) -> User | None:
+    async def create_user(self, request: UserCreateRequest) -> User:
         user = User(**jsonable_encoder(request))
         self.db.add(user)
         try:
@@ -43,52 +44,76 @@ class AuthService:
         await self.db.refresh(user)
         return user
 
-    async def authenticate(self, login: str, password: str) -> JWTTokens | None:
+    async def authenticate(self, login: str, password: str) -> CreatedSession:
         user_found = (await self.db.execute(select(User).where(User.login == login))).scalars().first()
         if not user_found or not user_found.check_password(password):
-            return None
+            raise HTTPException(status_code=HTTPStatus.FORBIDDEN)
 
-        tokens = JWTTokens(
-            access_token=await self.jwt.create_access_token(subject=str(user_found.id)),
-            refresh_token=await self.jwt.create_refresh_token(subject=str(user_found.id))
-        )
+        access_token = await self.jwt.create_access_token(subject=str(user_found.id))
+        refresh_token = await self.jwt.create_refresh_token(subject=str(user_found.id))
 
-        self.db.add(Session(
+        session = Session(
             user_id=user_found.id,
-            refresh_token=tokens.refresh_token,
-            expire=datetime.datetime.utcfromtimestamp(
-                (await self.jwt.get_raw_jwt(tokens.refresh_token))["exp"]
-            )
-        ))
+            refresh_token=refresh_token,
+            expire=datetime.datetime.utcfromtimestamp((await self.jwt.get_raw_jwt(refresh_token))["exp"])
+        )
+        self.db.add(session)
 
         try:
             await self.db.commit()
+            await self.db.refresh(session)
         except IntegrityError as e:
             await self.db.rollback()
             if isinstance(e.orig, UniqueViolation):
                 raise HTTPException(status_code=HTTPStatus.CONFLICT, **ErrorConflict(e.orig).model_dump())
             raise e
-        return tokens
+
+        return CreatedSession(
+            session_id=session.id,
+            access_token=access_token,
+            refresh_token=refresh_token
+        )
+
+    async def logout(self) -> RevokedSessions:
+        await self.jwt.jwt_required()
+        sessions = (
+            await self.db.execute(
+                select(Session).
+                where(Session.user_id == (await self.jwt.get_raw_jwt())['sub']).
+                where(Session.expire >= datetime.datetime.utcnow())
+            )
+        ).scalars().all()
+        revoked_sessions = []
+        for session in sessions:
+            token = await self.revoke_token(session.refresh_token, False)
+            if token:
+                revoked_sessions.append(token)
+
+        revoked_sessions.append(await self.revoke_token())
+
+        return RevokedSessions(sessions=revoked_sessions)
 
     async def refresh_token(self) -> JWTAccessToken:
         await self.jwt.jwt_refresh_token_required()
         return JWTAccessToken(access_token=await self.jwt.create_access_token(subject=await self.jwt.get_jwt_subject()))
 
-    async def revoke_refresh_token(self):
+    async def revoke_token(self, token: str = None, force: bool = True) -> str:
+        jti = (await self.jwt.get_raw_jwt(token))
+        revoked = force or (not await self.redis.get(jti["jti"]))
+        await self.redis.setex(
+            jti["jti"], datetime.datetime.utcfromtimestamp(jti["exp"]) - datetime.datetime.utcnow(), 'revoked'
+        )
+        return jti["jti"] if revoked else None
+
+    async def revoke_refresh_token(self) -> RevokedTokens:
         await self.jwt.jwt_refresh_token_required()
-        jti = (await self.jwt.get_raw_jwt())
-        await self.redis.setex(
-            jti["jti"], datetime.datetime.utcfromtimestamp(jti["exp"])-datetime.datetime.utcnow(), 'revoked'
-        )
+        return RevokedTokens(tokens=[await self.revoke_token()])
 
-    async def revoke_access_token(self):
+    async def revoke_access_token(self) -> RevokedTokens:
         await self.jwt.jwt_required()
-        jti = (await self.jwt.get_raw_jwt())
-        await self.redis.setex(
-            jti["jti"], datetime.datetime.utcfromtimestamp(jti["exp"])-datetime.datetime.utcnow(), 'revoked'
-        )
+        return RevokedTokens(tokens=[await self.revoke_token()])
 
-    async def update_profile(self, request: UserUpdateRequest):
+    async def update_profile(self, request: UserUpdateRequest) -> UpdatedProfileFields:
         await self.jwt.jwt_required()
         user = await self.db.get(User, await self.jwt.get_jwt_subject())
         if not user:
@@ -103,12 +128,17 @@ class AuthService:
                 raise HTTPException(status_code=HTTPStatus.CONFLICT, **ErrorConflict(e.orig).model_dump())
             raise e
         await self.db.commit()
+        # TODO: Доделать
+        return UpdatedProfileFields(updated_fields=[])
+
+    async def get_history(self) -> SessionsHistory:
+        await self.jwt.jwt_required()
+        # TODO: Сделать
+        return SessionsHistory(sessions=[])
 
 
 @lru_cache()
 def get_auth_service(
-        db: AsyncSession = Depends(get_session),
-        jwt: AuthJWT = Depends(),
-        redis: Redis = Depends(get_redis)
+        db: AsyncSession = Depends(get_session), jwt: AuthJWT = Depends(), redis: Redis = Depends(get_redis)
 ) -> AuthService:
     return AuthService(db, jwt, redis)
