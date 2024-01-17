@@ -1,6 +1,7 @@
 import datetime
 from functools import lru_cache
 from http import HTTPStatus
+from uuid import UUID
 
 from async_fastapi_jwt_auth import AuthJWT
 from fastapi import HTTPException, Depends
@@ -48,8 +49,9 @@ class AuthService:
         user_found = (await self.db.execute(select(User).where(User.login == login))).scalars().first()
         if not user_found or not user_found.check_password(password):
             raise HTTPException(status_code=HTTPStatus.FORBIDDEN)
+        roles = [user_role.role.name for user_role in user_found.roles]
 
-        access_token = await self.jwt.create_access_token(subject=str(user_found.id))
+        access_token = await self.jwt.create_access_token(subject=str(user_found.id), user_claims={'roles': roles})
         refresh_token = await self.jwt.create_refresh_token(subject=str(user_found.id))
 
         session = Session(
@@ -74,12 +76,14 @@ class AuthService:
             refresh_token=refresh_token
         )
 
-    async def logout(self) -> RevokedSessions:
+    async def logout(self, user_id: UUID | None) -> RevokedSessions:
         await self.jwt.jwt_required()
+        if user_id is None:
+            user_id = (await self.jwt.get_raw_jwt())['sub']
         sessions = (
             await self.db.execute(
                 select(Session).
-                where(Session.user_id == (await self.jwt.get_raw_jwt())['sub']).
+                where(Session.user_id == user_id).
                 where(Session.expire >= datetime.datetime.utcnow())
             )
         ).scalars().all()

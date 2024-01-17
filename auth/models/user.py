@@ -1,4 +1,5 @@
 from sqlalchemy import Column, String, Boolean
+from sqlalchemy.orm import relationship
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from db.postgres import Base
@@ -24,6 +25,8 @@ class User(IdMixin, TimestampMixin, Base):
         self.last_name = last_name
         self.email = email
         self.superuser = superuser or False
+
+    roles = relationship('UserRole', back_populates='user', lazy='selectin')
 
     def check_password(self, password: str) -> bool:
         return check_password_hash(self.password, password)
