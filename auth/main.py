@@ -26,14 +26,9 @@ async def lifespan(_: FastAPI):
     # Проверяем соединения с базами.
     await redis.redis.ping()
 
-    # TODO: Перейти на миграции
-    await create_database()
-
     yield
 
     # Отключаемся от баз при выключении сервера
-    # TODO: Перейти на миграции
-    # await purge_database()
     await redis.redis.close()
 
 
@@ -54,7 +49,7 @@ app = FastAPI(
     # Указываем функцию, обработки жизненного цикла приложения.
     lifespan=lifespan,
     # Описание сервиса
-    description="API для получения информации о фильмах, жанрах и людях, участвовавших в их создании",
+    description="API для сайта, личного кабинета и управления доступами",
 )
 
 # Подключаем роутер к серверу с указанием префикса для API (/v1/films).
