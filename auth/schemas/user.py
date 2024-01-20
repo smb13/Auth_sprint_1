@@ -1,34 +1,40 @@
+from datetime import datetime
 from typing import Annotated
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, ConfigDict
 
 
-class UserAuthRequest(BaseModel):
-    """Данные для аутентификации пользователя"""
+class UserLoginMixin(BaseModel):
+    """Логин пользователя"""
     login: Annotated[str, Field(description='Имя пользователя', examples=['username'])]
+
+
+class UserPasswordMixin(BaseModel):
+    """Пароль пользователя"""
     password: Annotated[str, Field(description='Пароль пользователя', examples=['qwerty'])]
 
 
-class UserCreateRequest(UserAuthRequest):
-    """Данные нового пользователя"""
+class UserId(BaseModel):
+    """Идентификатор пользователя"""
+    id: Annotated[UUID, Field(description='Идентификатор пользователя', examples=[uuid4()])]
+
+
+class UserCredentials(UserLoginMixin, UserPasswordMixin):
+    """Данные для аутентификации пользователя"""
+
+
+class UserAttributes(UserLoginMixin):
+    """Данные профиля пользователя"""
     first_name: Annotated[str, Field(description="Имя пользователя", examples=['Юзер'])]
     last_name: Annotated[str, Field(description="Фамилия пользователя", examples=['Юзерович'])]
     email: Annotated[EmailStr, Field(description="Адрес электронной почты", examples=['username@domain.ru'])]
 
-
-class UserCreated(BaseModel):
-    """Созданный пользователь"""
-    id: Annotated[UUID, Field(description='Идентификатор пользователя', examples=[uuid4()])]
-
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
-class UserUpdateRequest(BaseModel):
-    """Данные для аутентификации пользователя"""
-    login: Annotated[str | None, Field(description='Имя пользователя', examples=['username'])] = None
-    password: Annotated[str | None, Field(description='Пароль пользователя', examples=['qwerty'])] = None
+class UserProfile(UserAttributes, UserCredentials):
+    """Данные нового пользователя"""
 
 
 class JWTAccessToken(BaseModel):
@@ -43,7 +49,7 @@ class JWTAccessToken(BaseModel):
     )]
 
 
-class CreatedSession(JWTAccessToken):
+class NewSession(JWTAccessToken):
     """Новая пользовательская сессия"""
     refresh_token: Annotated[str, Field(
         description='Токен обновления',
@@ -81,7 +87,8 @@ class UpdatedProfileFields(BaseModel):
     ]
 
 
-class SessionsHistory(BaseModel):
-    sessions: list[
-        str
-    ]
+class SessionRecord(BaseModel):
+    id: Annotated[UUID, Field(description='Идентификатор сессии', examples=[uuid4()])]
+    created_at: datetime = Field(description='Время создания сессии', example=datetime.now())
+
+    model_config = ConfigDict(from_attributes=True)

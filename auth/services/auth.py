@@ -2,6 +2,7 @@ import datetime
 from functools import lru_cache
 from http import HTTPStatus
 
+import sqlalchemy.orm.attributes
 from async_fastapi_jwt_auth import AuthJWT
 from fastapi import HTTPException, Depends
 from fastapi.encoders import jsonable_encoder
@@ -16,8 +17,8 @@ from db.redisdb import get_redis
 from models.session import Session
 from models.user import User
 from schemas.error import ErrorConflict
-from schemas.user import JWTAccessToken, UserUpdateRequest, UserCreateRequest, RevokedSessions, CreatedSession, \
-    RevokedTokens, UpdatedProfileFields, SessionsHistory
+from schemas.user import JWTAccessToken, UserProfile, RevokedSessions, NewSession, \
+    RevokedTokens, UpdatedProfileFields, UserAttributes, UserCredentials, SessionRecord
 
 
 class AuthService:
@@ -31,7 +32,7 @@ class AuthService:
         self.jwt = jwt
         self.redis = redis
 
-    async def create_user(self, request: UserCreateRequest) -> User:
+    async def create_user(self, request: UserProfile) -> User:
         user = User(**jsonable_encoder(request))
         self.db.add(user)
         try:
@@ -44,7 +45,7 @@ class AuthService:
         await self.db.refresh(user)
         return user
 
-    async def authenticate(self, login: str, password: str) -> CreatedSession:
+    async def authenticate(self, login: str, password: str) -> NewSession:
         user_found = (await self.db.execute(select(User).where(User.login == login))).scalars().first()
         if not user_found or not user_found.check_password(password):
             raise HTTPException(status_code=HTTPStatus.FORBIDDEN)
@@ -68,7 +69,7 @@ class AuthService:
                 raise HTTPException(status_code=HTTPStatus.CONFLICT, **ErrorConflict(e.orig).model_dump())
             raise e
 
-        return CreatedSession(
+        return NewSession(
             session_id=session.id,
             access_token=access_token,
             refresh_token=refresh_token
@@ -113,12 +114,16 @@ class AuthService:
         await self.jwt.jwt_required()
         return RevokedTokens(tokens=[await self.revoke_token()])
 
-    async def update_profile(self, request: UserUpdateRequest) -> UpdatedProfileFields:
+    async def update_profile(self, request: UserCredentials) -> UpdatedProfileFields:
         await self.jwt.jwt_required()
         user = await self.db.get(User, await self.jwt.get_jwt_subject())
         if not user:
             raise HTTPException(status_code=HTTPStatus.NOT_FOUND)
         user.update(**request.model_dump())
+        updated_fields = []
+        for field in UserCredentials.model_fields.keys():
+            if sqlalchemy.orm.attributes.get_history(user, field).has_changes():
+                updated_fields.append(field)
 
         try:
             await self.db.merge(user)
@@ -128,13 +133,21 @@ class AuthService:
                 raise HTTPException(status_code=HTTPStatus.CONFLICT, **ErrorConflict(e.orig).model_dump())
             raise e
         await self.db.commit()
-        # TODO: Доделать
-        return UpdatedProfileFields(updated_fields=[])
+        return UpdatedProfileFields(updated_fields=updated_fields)
 
-    async def get_history(self) -> SessionsHistory:
+    async def get_profile(self) -> UserAttributes:
         await self.jwt.jwt_required()
-        # TODO: Сделать
-        return SessionsHistory(sessions=[])
+        user = await self.db.get(User, await self.jwt.get_jwt_subject())
+        if not user:
+            raise HTTPException(status_code=HTTPStatus.NOT_FOUND)
+        return UserAttributes.model_validate(user)
+
+    async def get_history(self) -> list[SessionRecord]:
+        await self.jwt.jwt_required()
+        return [
+            SessionRecord.model_validate(session) for session in
+            (await self.db.scalars(select(Session).where(Session.user_id == await self.jwt.get_jwt_subject()))).all()
+        ]
 
 
 @lru_cache()
