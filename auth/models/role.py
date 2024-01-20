@@ -14,9 +14,10 @@ class Role(IdMixin, TimestampMixin, Base):
     name = Column(String(255), unique=True, nullable=False)
 
     users = relationship('UserRole', back_populates='role', lazy='selectin')
+    permissions = relationship('RolePermission', back_populates='role', lazy='selectin')
 
     def __repr__(self) -> str:
-        return f'<Role {self.name}>'
+        return f'<Role {self.name}, permissions: {self.permissions}>'
 
 
 class UserRole(IdMixin, TimestampMixin, Base):

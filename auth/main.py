@@ -14,7 +14,7 @@ from redis.asyncio import Redis
 
 from core.config import project_settings, redis_settings
 from core.logger import LOGGING
-from db.postgres import create_database  # , purge_database
+from utils.db_utils import create_permissions
 from db import redisdb as redis
 
 
@@ -25,6 +25,9 @@ async def lifespan(_: FastAPI):
 
     # Проверяем соединения с базами.
     await redis.redis.ping()
+
+    # Создаем доступы
+    await create_permissions()
 
     yield
 
