@@ -35,6 +35,7 @@ COPY db ${ROOTDIR}/db
 COPY models ${ROOTDIR}/models
 COPY schemas ${ROOTDIR}/schemas
 COPY services ${ROOTDIR}/services
+COPY utils ${ROOTDIR}/utils
 COPY main.py ${ROOTDIR}/
 COPY alembic.ini ${ROOTDIR}/
 COPY gunicorn.conf.py ${ROOTDIR}/

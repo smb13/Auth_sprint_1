@@ -34,8 +34,6 @@ services:
 
   auth:
     build: auth
-    profiles:
-      - auth
     env_file: configs/.env
     environment:
       - POSTGRES_HOST=postgres
