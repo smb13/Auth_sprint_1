@@ -1,6 +1,7 @@
 import datetime
 from functools import lru_cache
 from http import HTTPStatus
+from uuid import UUID
 
 import sqlalchemy.orm.attributes
 from async_fastapi_jwt_auth import AuthJWT
@@ -14,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.postgres import get_session
 from db.redisdb import get_redis
+from models import Role, UserRole
 from models.session import Session
 from models.user import User
 from schemas.error import ErrorConflict
@@ -49,8 +51,13 @@ class AuthService:
         user_found = (await self.db.execute(select(User).where(User.login == login))).scalars().first()
         if not user_found or not user_found.check_password(password):
             raise HTTPException(status_code=HTTPStatus.FORBIDDEN)
-
-        access_token = await self.jwt.create_access_token(subject=str(user_found.id))
+        roles_ids = [str(uuid) for uuid in (await self.db.execute(select(UserRole.role_id).
+                                                                  join(User).
+                                                                  where(User.login == login))
+                                            ).scalars().all()]
+        access_token = await self.jwt.create_access_token(subject=str(user_found.id),
+                                                          user_claims={'roles': roles_ids,
+                                                                       'superuser': user_found.superuser})
         refresh_token = await self.jwt.create_refresh_token(subject=str(user_found.id))
 
         session = Session(
@@ -75,12 +82,14 @@ class AuthService:
             refresh_token=refresh_token
         )
 
-    async def logout(self) -> RevokedSessions:
+    async def logout(self, user_id: UUID | None = None) -> RevokedSessions:
         await self.jwt.jwt_required()
+        if user_id is None:
+            user_id = (await self.jwt.get_raw_jwt())['sub']
         sessions = (
             await self.db.execute(
                 select(Session).
-                where(Session.user_id == (await self.jwt.get_raw_jwt())['sub']).
+                where(Session.user_id == user_id).
                 where(Session.expire >= datetime.datetime.utcnow())
             )
         ).scalars().all()

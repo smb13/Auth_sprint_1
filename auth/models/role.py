@@ -5,20 +5,23 @@ from sqlalchemy.orm import relationship
 from db.postgres import Base
 from models.mixin import IdMixin, TimestampMixin
 
+admin_role_name = 'admin'
+
 
 class Role(IdMixin, TimestampMixin, Base):
-    __tablename__ = 'role'
+    __tablename__ = 'roles'
 
     name = Column(String(255), unique=True, nullable=False)
 
-    user_role = relationship('UserRole', back_populates='role', lazy='selectin')
+    users = relationship('UserRole', back_populates='role', lazy='selectin')
+    permissions = relationship('RolePermission', back_populates='role', lazy='selectin')
 
     def __repr__(self) -> str:
-        return f'<Role {self.name}>'
+        return f'<Role {self.name}, permissions: {self.permissions}>'
 
 
 class UserRole(IdMixin, TimestampMixin, Base):
-    __tablename__ = 'user_role'
+    __tablename__ = 'user_roles'
 
     user_id = Column(UUID(as_uuid=True),
                      ForeignKey('users.id', ondelete='CASCADE'),
@@ -27,5 +30,5 @@ class UserRole(IdMixin, TimestampMixin, Base):
                      ForeignKey('roles.id', ondelete='CASCADE'),
                      nullable=False)
 
-    role = relationship('Role', back_populates='user', lazy='selectin')
-    user = relationship('User', back_populates='role', lazy='selectin')
+    role = relationship('Role', back_populates='users', lazy='selectin')
+    user = relationship('User', back_populates='roles', lazy='selectin')

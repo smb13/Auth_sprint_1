@@ -29,17 +29,20 @@ USER 0
 
 COPY alembic ${ROOTDIR}/alembic
 COPY api ${ROOTDIR}/api
+COPY cli ${ROOTDIR}/cli
 COPY core ${ROOTDIR}/core
 COPY db ${ROOTDIR}/db
 COPY models ${ROOTDIR}/models
 COPY schemas ${ROOTDIR}/schemas
 COPY services ${ROOTDIR}/services
+COPY utils ${ROOTDIR}/utils
 COPY main.py ${ROOTDIR}/
 COPY alembic.ini ${ROOTDIR}/
 COPY gunicorn.conf.py ${ROOTDIR}/
+COPY start_auth.sh ${ROOTDIR}/
 
 USER ${USERNAME}
 
 EXPOSE 8000
 
-CMD [ "gunicorn", "main:app" ]
+ENTRYPOINT ["sh", "start_auth.sh"]
