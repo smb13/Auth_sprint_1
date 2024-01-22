@@ -1,4 +1,4 @@
-from sqlalchemy import Column, ForeignKey, String
+from sqlalchemy import Column, ForeignKey, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
@@ -20,9 +20,14 @@ class Permission(IdMixin, TimestampMixin, Base):
 class RolePermission(IdMixin, TimestampMixin, Base):
     __tablename__ = 'role_permissions'
 
+    __table_args__ = (
+        UniqueConstraint('role_id', 'permission_id'),
+    )
+
     role_id = Column(UUID(as_uuid=True),
                      ForeignKey('roles.id', ondelete='CASCADE'),
                      nullable=False)
+
     permission_id = Column(UUID(as_uuid=True),
                            ForeignKey('permissions.id', ondelete='CASCADE'),
                            nullable=False)

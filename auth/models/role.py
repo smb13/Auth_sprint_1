@@ -1,11 +1,9 @@
-from sqlalchemy import Column, ForeignKey, String
+from sqlalchemy import Column, ForeignKey, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
 from db.postgres import Base
 from models.mixin import IdMixin, TimestampMixin
-
-admin_role_name = 'admin'
 
 
 class Role(IdMixin, TimestampMixin, Base):
@@ -22,6 +20,10 @@ class Role(IdMixin, TimestampMixin, Base):
 
 class UserRole(IdMixin, TimestampMixin, Base):
     __tablename__ = 'user_roles'
+
+    __table_args__ = (
+        UniqueConstraint('user_id', 'role_id'),
+    )
 
     user_id = Column(UUID(as_uuid=True),
                      ForeignKey('users.id', ondelete='CASCADE'),
