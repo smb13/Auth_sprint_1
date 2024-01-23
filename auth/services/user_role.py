@@ -4,12 +4,14 @@ from uuid import UUID
 
 from async_fastapi_jwt_auth import AuthJWT
 from fastapi import Depends, HTTPException
+from psycopg.errors import UniqueViolation
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.exc import IntegrityError
 
 from db.postgres import get_session
 from models.permission import Permission, RolePermission
-from models.role import Role, UserRole
+from models.role import UserRole
 from models.user import User
 from services.auth import AuthService, get_auth_service
 
@@ -33,12 +35,26 @@ class UserRoleService:
         )
         return result.scalars().first()
 
-    async def create_user_role(
+    async def assign_user_role(
             self, user_id: UUID, role_id: UUID
     ) -> None:
         user_role = UserRole(user_id=user_id, role_id=role_id)
         self.db.add(user_role)
-        await self.db.commit()
+        try:
+            await self.db.commit()
+        except IntegrityError as e:
+            await self.db.rollback()
+            if isinstance(e.orig, UniqueViolation):
+                if 'user_roles_user_id_fkey' in str(e):
+                    raise HTTPException(status_code=HTTPStatus.BAD_REQUEST,
+                                        detail='User not found')
+                if 'user_roles_role_id_fkey' in str(e):
+                    raise HTTPException(status_code=HTTPStatus.BAD_REQUEST,
+                                        detail='Role not found')
+                if 'user_roles_user_id_role_id_key' in str(e):
+                    raise HTTPException(status_code=HTTPStatus.BAD_REQUEST,
+                                        detail='User role already exists')
+            raise e
         await self.auth_service.logout(user_id)
 
     async def delete_user_role(
@@ -52,13 +68,11 @@ class UserRoleService:
         await self.auth_service.logout(user_id)
         return result.rowcount != 0
 
-    async def check_access(self, allow_permissions: list[Permission] = None) -> None:
+    async def check_access(self, allow_permission: Permission = None) -> None:
         await self.jwt.jwt_required()
 
-        if allow_permissions is None:
+        if allow_permission is None:
             return
-
-        allow_permission_ids = [permission.id[0] for permission in allow_permissions]
 
         access_jwt = await self.jwt.get_raw_jwt()
         roles_jwt = access_jwt['roles']
@@ -67,7 +81,7 @@ class UserRoleService:
                       where(RolePermission.role_id.in_(roles_jwt))
                   )).scalars().all()
 
-        if not set(allow_permission_ids) & set(result):
+        if not set(allow_permission.id) & set(result):
             raise HTTPException(status_code=HTTPStatus.FORBIDDEN,
                                 detail='Insufficient permissions')
 

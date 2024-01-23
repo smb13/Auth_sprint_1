@@ -1,8 +1,8 @@
-from sqlalchemy import insert, select, update
+from fastapi.encoders import jsonable_encoder
+from sqlalchemy import insert, select
 
 from db.postgres import async_session
-from models.permission import Permission, RolePermission, permissions
-from fastapi.encoders import jsonable_encoder
+from models.permission import Permission, permissions
 
 
 async def create_permissions() -> Permission:

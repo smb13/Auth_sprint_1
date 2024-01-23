@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.postgres import get_session
 from db.redisdb import get_redis
-from models import Role, UserRole
+from models import UserRole
 from models.session import Session
 from models.user import User
 from schemas.error import ErrorConflict
