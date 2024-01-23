@@ -1,0 +1,77 @@
+version: '3'
+services:
+  postgres:
+    image: postgres:15
+    env_file: ../../configs/.env
+    volumes:
+      - ../../postgres/initial.sql:/docker-entrypoint-initdb.d/initial.sql:ro
+    expose:
+      - "5432"
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7.2.4
+    env_file: ../../configs/.env
+    command: redis-server --appendonly yes
+    expose:
+      - "6379"
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: [ "CMD", "redis-cli", "--raw", "incr", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  auth:
+    build: ../../auth
+    image: movies-auth-image
+    env_file: ../../configs/.env
+    environment:
+      - POSTGRES_HOST=postgres
+      - REDIS_HOST=redis
+    expose:
+      - "8000"
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -sS http://127.0.0.1:8000 || exit 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  tests:
+    image: movies-auth-image
+    pull_policy: never
+    env_file: ../../configs/.env
+    environment:
+      - POSTGRES_HOST=postgres
+      - REDIS_HOST=redis
+      - SERVICE_URL=http://auth:8000
+    volumes:
+      - ../:/opt/app/tests:ro
+      - ../../setup.cfg:/opt/app/setup.cfg:ro
+    depends_on:
+      auth:
+        condition: service_healthy
+    entrypoint: >
+      sh -c "pip install -r tests/functional/requirements.txt
+      && PYTHONPATH=. python3 tests/functional/utils/wait_for_pg.py
+      && PYTHONPATH=. python3 tests/functional/utils/wait_for_redis.py
+      && pytest"
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -sS http://127.0.0.1:8000 || exit 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
