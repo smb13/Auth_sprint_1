@@ -54,13 +54,14 @@ async def access_revoke(auth: AuthService = Depends(get_auth_service)) -> Revoke
 
 
 @router.patch("/profile", dependencies=[Depends(HTTPBearer())])
-async def profile(request: UserCredentials, auth: AuthService = Depends(get_auth_service)) -> UpdatedProfileFields:
+async def patch_profile(request: UserCredentials, auth: AuthService = Depends(get_auth_service))\
+        -> UpdatedProfileFields:
     """Обновление профилья пользователя"""
     return await auth.update_profile(request)
 
 
 @router.get("/profile", dependencies=[Depends(HTTPBearer())])
-async def profile(auth: AuthService = Depends(get_auth_service)) -> UserAttributes:
+async def get_profile(auth: AuthService = Depends(get_auth_service)) -> UserAttributes:
     """Обновление профилья пользователя"""
     return await auth.get_profile()
 
