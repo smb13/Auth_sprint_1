@@ -20,8 +20,10 @@
 
 Для запуска всех тестов воспользуйтесь командой:
 
+`docker compose -f tests/functional/docker-compose.yml up --build --abort-on-container-exit --exit-code-from test`
 
 
+### Ссылка на репозиторий команды https://github.com/smb13/Auth_sprint_1.git
 
 
 # Проектная работа 6 спринта

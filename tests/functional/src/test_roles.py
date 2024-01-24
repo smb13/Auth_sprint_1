@@ -211,7 +211,7 @@ async def test_delete_role_not_found(
 
 
 @pytest.mark.asyncio(scope="session")
-async def test_list_roles(
+async def test_roles_list(
         pg_drop_roles, pg_drop_users, generate_fake_roles, make_get_request, pg_set_roles,
         pg_set_users, method_login, auth_header
 ):
@@ -222,7 +222,7 @@ async def test_list_roles(
                                                                        method_login, auth_header, pg_drop_users,
                                                                        pg_drop_roles)
 
-    # 2. Тестирование delete
+    # 2. Тестирование получения списка ролей
     response = await make_get_request(
         method_name, test_settings, headers=headers
     )
