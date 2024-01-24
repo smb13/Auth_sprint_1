@@ -13,7 +13,7 @@ router = APIRouter(redirect_slashes=False, prefix="/users", tags=['Users'])
 
 @router.post(
     '/{user_id}/roles/{role_id}',
-    status_code=HTTPStatus.NO_CONTENT,
+    status_code=HTTPStatus.CREATED,
     summary='Добавление роли пользователю',
     responses={
         HTTPStatus.BAD_REQUEST: {'model': HttpExceptionModel},

@@ -130,10 +130,61 @@ def generate_fake_users(faker):
 
 
 @pytest.fixture
+def generate_fake_roles(faker):
+    async def inner(quantity: int = None) -> list[dict[str, str]]:
+        return list([{
+            'name': faker.name() + str(randint(0, sys.maxsize)),
+            'id': str(uuid4()),
+            'created_at': faker.date_time_this_decade(),
+            'modified_at': faker.date_time_this_decade()
+        } for _ in range(quantity or 100)])
+
+    return inner
+
+
+@pytest.fixture
+def generate_fake_permissions(faker):
+    async def inner(quantity: int = None) -> list[dict[str, str]]:
+        return list([{
+            'name': faker.name() + str(randint(0, sys.maxsize)),
+            'id': str(uuid4())
+        } for _ in range(quantity or 10)])
+
+    return inner
+
+
+@pytest.fixture
 def pg_drop_users(pg_client):
     async def inner():
         pg_client.execute('DELETE FROM sessions')
         pg_client.execute('DELETE FROM users')
+        pg_client.commit()
+
+    return inner
+
+
+@pytest.fixture
+def pg_drop_roles(pg_client):
+    async def inner():
+        pg_client.execute('DELETE FROM roles')
+        pg_client.commit()
+
+    return inner
+
+
+@pytest.fixture
+def pg_drop_user_roles(pg_client):
+    async def inner():
+        pg_client.execute('DELETE FROM user_roles')
+        pg_client.commit()
+
+    return inner
+
+
+@pytest.fixture
+def pg_drop_role_permissions(pg_client):
+    async def inner():
+        pg_client.execute('DELETE FROM role_permissions')
         pg_client.commit()
 
     return inner
@@ -151,6 +202,32 @@ def pg_set_users(pg_client, clear_all):
                 user['password'] = generate_password_hash(user['password'])
                 pg_client.execute(query, tuple(user.values()))
             pg_client.commit()
+
+    return inner
+
+
+@pytest.fixture
+def pg_set_roles(pg_client, pg_drop_roles):
+    async def inner(roles: list[dict[str, str]]):
+        await pg_drop_roles()
+        if roles:
+            query = ("INSERT INTO roles (" + ", ".join(roles[0].keys()) +
+                     ") VALUES (" + ", ".join(['%s'] * len(roles[0])) + ")")
+            for role in roles:
+                role = dict(role)
+                pg_client.execute(query, tuple(role.values()))
+            pg_client.commit()
+
+    return inner
+
+
+@pytest.fixture
+def pg_get_permissions(pg_client, pg_drop_roles):
+    async def inner():
+        query = 'SELECT p.id, p.name FROM permissions p'
+        cursor = pg_client.execute(query)
+        permissions = [{'id': permission[0], 'name': permission[1]} for permission in cursor.fetchall()]
+        return permissions
 
     return inner
 

@@ -4,7 +4,7 @@ from uuid import UUID
 
 from async_fastapi_jwt_auth import AuthJWT
 from fastapi import Depends, HTTPException
-from psycopg.errors import UniqueViolation
+from psycopg.errors import UniqueViolation, ForeignKeyViolation
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
@@ -44,13 +44,14 @@ class UserRoleService:
             await self.db.commit()
         except IntegrityError as e:
             await self.db.rollback()
-            if isinstance(e.orig, UniqueViolation):
+            if isinstance(e.orig, ForeignKeyViolation):
                 if 'user_roles_user_id_fkey' in str(e):
                     raise HTTPException(status_code=HTTPStatus.BAD_REQUEST,
                                         detail='User not found')
                 if 'user_roles_role_id_fkey' in str(e):
                     raise HTTPException(status_code=HTTPStatus.BAD_REQUEST,
                                         detail='Role not found')
+            if isinstance(e.orig, UniqueViolation):
                 if 'user_roles_user_id_role_id_key' in str(e):
                     raise HTTPException(status_code=HTTPStatus.BAD_REQUEST,
                                         detail='User role already exists')

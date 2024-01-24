@@ -18,6 +18,7 @@ router = APIRouter(redirect_slashes=False, prefix="/roles", tags=['Roles'])
     '',
     response_model=RoleResponse,
     summary='Создание роли',
+    status_code=HTTPStatus.CREATED,
     responses={
         HTTPStatus.BAD_REQUEST: {'model': HttpExceptionModel},
         HTTPStatus.UNAUTHORIZED: {'model': HttpExceptionModel},
@@ -39,6 +40,7 @@ async def create_role(
     '/{role_id}',
     response_model=RoleResponse,
     summary='Изменение роли',
+    status_code=HTTPStatus.OK,
     responses={
         HTTPStatus.UNAUTHORIZED: {'model': HttpExceptionModel},
         HTTPStatus.FORBIDDEN: {'model': HttpExceptionModel},
@@ -105,7 +107,7 @@ async def list_roles(
 
 @router.post(
     '/{role_id}/permissions/{permission_id}',
-    status_code=HTTPStatus.NO_CONTENT,
+    status_code=HTTPStatus.CREATED,
     summary='Добавление доступа роли',
     responses={
         HTTPStatus.BAD_REQUEST: {'model': HttpExceptionModel},
