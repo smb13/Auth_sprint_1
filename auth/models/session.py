@@ -8,7 +8,7 @@ from models.mixin import IdMixin, TimestampMixin
 class Session(IdMixin, TimestampMixin, Base):
     __tablename__ = 'sessions'
 
-    user_id = Column(UUID(as_uuid=True), ForeignKey('users.id'))
+    user_id = Column(UUID(as_uuid=True), ForeignKey('users.id', ondelete='CASCADE'))
     refresh_token = Column(String, nullable=False)
     expire = Column(DateTime, nullable=False)
 
