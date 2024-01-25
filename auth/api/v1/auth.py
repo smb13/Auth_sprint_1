@@ -1,5 +1,7 @@
+from typing import Annotated
+
 from async_fastapi_jwt_auth import AuthJWT
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from http import HTTPStatus
 
 from fastapi.security import HTTPBearer
@@ -67,6 +69,9 @@ async def get_profile(auth: AuthService = Depends(get_auth_service)) -> UserAttr
 
 
 @router.get("/history", dependencies=[Depends(HTTPBearer())])
-async def history(auth: AuthService = Depends(get_auth_service)) -> list[SessionRecord]:
+async def history(
+        pagesize: Annotated[int, Query(description='Число сессий на страницу', examples=[100], gt=0, lt=500)] = 100,
+        page: Annotated[int, Query(description='Страница', examples=[1], gt=0)] = 1,
+        auth: AuthService = Depends(get_auth_service)) -> list[SessionRecord]:
     """Получение истории входов пользователя"""
-    return await auth.get_history()
+    return await auth.get_history(pagesize=pagesize, page=page)

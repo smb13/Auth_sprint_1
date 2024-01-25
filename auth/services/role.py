@@ -1,4 +1,4 @@
-from functools import lru_cache
+from functools import lru_cache, wraps
 from http import HTTPStatus
 from typing import Optional
 from uuid import UUID
@@ -16,6 +16,18 @@ from models.permission import RolePermission, Permission
 from models.role import Role
 from schemas.permission import PermissionResponse
 from schemas.role import RoleBase, RoleResponse
+
+
+def check_access(allow_permission: Permission):
+    def inner(function):
+        @wraps(function)
+        async def wrapper(*args, **kwargs):
+            user_role_service = kwargs.get('user_role_service')
+            if not await user_role_service.is_superuser():
+                await user_role_service.check_access(allow_permission)
+            return await function(*args, **kwargs)
+        return wrapper
+    return inner
 
 
 class RoleService:

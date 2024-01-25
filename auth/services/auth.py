@@ -97,8 +97,10 @@ class AuthService:
         for session in sessions:
             token = await self.revoke_token(session.refresh_token, False)
             if token:
+                # Отзыв соответствующего токена обновления.
                 revoked_sessions.append(token)
 
+        # Отзыв текущего access токена.
         revoked_sessions.append(await self.revoke_token())
 
         return RevokedSessions(sessions=revoked_sessions)
@@ -108,8 +110,10 @@ class AuthService:
         return JWTAccessToken(access_token=await self.jwt.create_access_token(subject=await self.jwt.get_jwt_subject()))
 
     async def revoke_token(self, token: str = None, force: bool = True) -> str:
+        # По умолчанию отзываем текущий токен доступа.
         jti = (await self.jwt.get_raw_jwt(token))
         revoked = force or (not await self.redis.get(jti["jti"]))
+        # В редис кладется jti токена для инвалидации.
         await self.redis.setex(
             jti["jti"], datetime.datetime.utcfromtimestamp(jti["exp"]) - datetime.datetime.utcnow(), 'revoked'
         )
@@ -151,11 +155,24 @@ class AuthService:
             raise HTTPException(status_code=HTTPStatus.NOT_FOUND)
         return UserAttributes.model_validate(user)
 
-    async def get_history(self) -> list[SessionRecord]:
+    async def get_history(self, pagesize: int, page: int) -> list[SessionRecord]:
         await self.jwt.jwt_required()
+
+        if pagesize < 0:
+            pagesize = 100
+        if pagesize > 500:
+            pagesize = 500
+        if page < 1:
+            page = 1
+
         return [
             SessionRecord.model_validate(session) for session in
-            (await self.db.scalars(select(Session).where(Session.user_id == await self.jwt.get_jwt_subject()))).all()
+            (await self.db.scalars(
+                select(Session).
+                where(Session.user_id == await self.jwt.get_jwt_subject()).
+                limit(pagesize).
+                offset((page-1)*pagesize)
+            )).all()
         ]
 
 
