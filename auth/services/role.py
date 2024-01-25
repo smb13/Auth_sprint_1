@@ -6,7 +6,7 @@ from uuid import UUID
 from async_fastapi_jwt_auth import AuthJWT
 from fastapi import Depends, HTTPException
 from fastapi.encoders import jsonable_encoder
-from psycopg.errors import UniqueViolation
+from psycopg.errors import UniqueViolation, ForeignKeyViolation
 from sqlalchemy import delete, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -97,13 +97,14 @@ class RoleService:
             await self.db.commit()
         except IntegrityError as e:
             await self.db.rollback()
-            if isinstance(e.orig, UniqueViolation):
+            if isinstance(e.orig, ForeignKeyViolation):
                 if 'role_permissions_role_id_fkey' in str(e):
                     raise HTTPException(status_code=HTTPStatus.BAD_REQUEST,
                                         detail='Role not found')
                 if 'role_permissions_permission_id_fkey' in str(e):
                     raise HTTPException(status_code=HTTPStatus.BAD_REQUEST,
                                         detail='Permission not found')
+            if isinstance(e.orig, UniqueViolation):
                 if 'role_permissions_role_id_permission_id_key' in str(e):
                     raise HTTPException(status_code=HTTPStatus.BAD_REQUEST,
                                         detail='Role permission already exists')
