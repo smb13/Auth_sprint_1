@@ -6,6 +6,7 @@ from fastapi.security import HTTPBearer
 
 from models.permission import user_management
 from schemas.error import HttpExceptionModel
+from services.role import check_access
 from services.user_role import UserRoleService, get_user_role_service
 
 router = APIRouter(redirect_slashes=False, prefix="/users", tags=['Users'])
@@ -22,13 +23,12 @@ router = APIRouter(redirect_slashes=False, prefix="/users", tags=['Users'])
     },
     dependencies=[Depends(HTTPBearer())]
 )
+@check_access(user_management)
 async def assign_user_role(
         user_id: UUID,
         role_id: UUID,
         user_role_service: UserRoleService = Depends(get_user_role_service),
 ) -> None:
-    if not await user_role_service.is_superuser():
-        await user_role_service.check_access(user_management)
     await user_role_service.assign_user_role(user_id, role_id)
 
 
@@ -43,13 +43,12 @@ async def assign_user_role(
     },
     dependencies=[Depends(HTTPBearer())]
 )
+@check_access(user_management)
 async def delete_user_role(
         user_id: UUID,
         role_id: UUID,
         user_role_service: UserRoleService = Depends(get_user_role_service),
 ) -> None:
-    if not await user_role_service.is_superuser():
-        await user_role_service.check_access(user_management)
     if not await user_role_service.delete_user_role(user_id, role_id):
         raise HTTPException(status_code=HTTPStatus.NOT_FOUND,
                             detail='User role not found')

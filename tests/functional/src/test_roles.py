@@ -1,5 +1,5 @@
 import http
-from random import randint, randrange
+from random import randrange
 
 import pytest
 
@@ -232,4 +232,3 @@ async def test_roles_list(
     # 3. Очистка.
     await pg_drop_users()
     await pg_drop_roles()
-

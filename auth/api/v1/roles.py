@@ -8,7 +8,7 @@ from models.permission import role_management
 from schemas.error import HttpExceptionModel
 from schemas.permission import PermissionResponse
 from schemas.role import RoleResponse, RoleBase
-from services.role import RoleService, get_role_service
+from services.role import RoleService, get_role_service, check_access
 from services.user_role import UserRoleService, get_user_role_service
 
 router = APIRouter(redirect_slashes=False, prefix="/roles", tags=['Roles'])
@@ -26,13 +26,12 @@ router = APIRouter(redirect_slashes=False, prefix="/roles", tags=['Roles'])
     },
     dependencies=[Depends(HTTPBearer())]
 )
+@check_access(role_management)
 async def create_role(
         role_create: RoleBase,
         role_service: RoleService = Depends(get_role_service),
-        user_role_service: UserRoleService = Depends(get_user_role_service),
+        user_role_service: UserRoleService = Depends(get_user_role_service)
 ) -> RoleResponse:
-    if not await user_role_service.is_superuser():
-        await user_role_service.check_access(role_management)
     return await role_service.create_role(role_create)
 
 
@@ -48,18 +47,16 @@ async def create_role(
     },
     dependencies=[Depends(HTTPBearer())]
 )
+@check_access(role_management)
 async def patch_role(
         role_id: UUID,
         role_patch: RoleBase,
         role_service: RoleService = Depends(get_role_service),
         user_role_service: UserRoleService = Depends(get_user_role_service),
 ) -> RoleResponse:
-    if not await user_role_service.is_superuser():
-        await user_role_service.check_access(role_management)
     role = await role_service.patch_role(role_id, role_patch)
     if not role:
-        raise HTTPException(status_code=HTTPStatus.NOT_FOUND,
-                            detail='Role not found')
+        raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail='Role not found')
     return role
 
 
@@ -74,16 +71,14 @@ async def patch_role(
     },
     dependencies=[Depends(HTTPBearer())]
 )
+@check_access(role_management)
 async def delete_role(
         role_id: UUID,
         role_service: RoleService = Depends(get_role_service),
         user_role_service: UserRoleService = Depends(get_user_role_service),
 ) -> None:
-    if not await user_role_service.is_superuser():
-        await user_role_service.check_access(role_management)
     if not (await role_service.delete_role(role_id)):
-        raise HTTPException(status_code=HTTPStatus.NOT_FOUND,
-                            detail='Role not found')
+        raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail='Role not found')
 
 
 @router.get(
@@ -96,12 +91,11 @@ async def delete_role(
     },
     dependencies=[Depends(HTTPBearer())]
 )
+@check_access(role_management)
 async def list_roles(
         role_service: RoleService = Depends(get_role_service),
         user_role_service: UserRoleService = Depends(get_user_role_service),
 ) -> list[RoleResponse]:
-    if not await user_role_service.is_superuser():
-        await user_role_service.check_access(role_management)
     return await role_service.list_roles()
 
 
@@ -116,14 +110,13 @@ async def list_roles(
     },
     dependencies=[Depends(HTTPBearer())]
 )
+@check_access(role_management)
 async def assign_role_permission(
         role_id: UUID,
         permission_id: UUID,
         user_role_service: UserRoleService = Depends(get_user_role_service),
         role_service: RoleService = Depends(get_role_service),
 ) -> None:
-    if not await user_role_service.is_superuser():
-        await user_role_service.check_access(role_management)
     await role_service.assign_role_permission(role_id, permission_id)
 
 
@@ -138,14 +131,13 @@ async def assign_role_permission(
     },
     dependencies=[Depends(HTTPBearer())]
 )
+@check_access(role_management)
 async def delete_role_permission(
         role_id: UUID,
         permission_id: UUID,
         user_role_service: UserRoleService = Depends(get_user_role_service),
         role_service: RoleService = Depends(get_role_service),
 ) -> None:
-    if not await user_role_service.is_superuser():
-        await user_role_service.check_access(role_management)
     if not await role_service.delete_role_permission(role_id, permission_id):
         raise HTTPException(status_code=HTTPStatus.NOT_FOUND,
                             detail='User role not found')
@@ -162,11 +154,10 @@ async def delete_role_permission(
     },
     dependencies=[Depends(HTTPBearer())]
 )
+@check_access(role_management)
 async def get_role_permissions(
         role_id: UUID,
         user_role_service: UserRoleService = Depends(get_user_role_service),
         role_service: RoleService = Depends(get_role_service),
 ) -> list[PermissionResponse]:
-    if not await user_role_service.is_superuser():
-        await user_role_service.check_access(role_management)
     return await role_service.get_role_permissions(role_id)
