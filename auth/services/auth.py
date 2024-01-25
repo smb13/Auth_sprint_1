@@ -151,11 +151,24 @@ class AuthService:
             raise HTTPException(status_code=HTTPStatus.NOT_FOUND)
         return UserAttributes.model_validate(user)
 
-    async def get_history(self) -> list[SessionRecord]:
+    async def get_history(self, pagesize: int, page: int) -> list[SessionRecord]:
         await self.jwt.jwt_required()
+
+        if pagesize < 0:
+            pagesize = 100
+        if pagesize > 500:
+            pagesize = 500
+        if page < 1:
+            page = 1
+
         return [
             SessionRecord.model_validate(session) for session in
-            (await self.db.scalars(select(Session).where(Session.user_id == await self.jwt.get_jwt_subject()))).all()
+            (await self.db.scalars(
+                select(Session).
+                where(Session.user_id == await self.jwt.get_jwt_subject()).
+                limit(pagesize).
+                offset((page-1)*pagesize)
+            )).all()
         ]
 
 
